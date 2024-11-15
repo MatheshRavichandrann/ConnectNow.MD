@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .  # Assumes Dockerfile is in the current directory
+      dockerfile: Dockerfile
+    container_name: spring_app
+    ports:
+      - 8080:8080
+    depends_on:
+      - mongoDB
+    environment:
+      SPRING_PROFILES_ACTIVE: docker  # Optional if using profiles in Spring Boot
+    networks:
+      - app-network
+
+  mongoDB:
+    image: mongo
+    container_name: mongo_db
+    ports:
+      - 27017:27017
+    volumes:
+      - mongo_data:/data/db
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: zoro
+      MONGO_INITDB_ROOT_PASSWORD: zoro
+    networks:
+      - app-network
+
+  mongo-express:
+    image: mongo-express
+    container_name: mongo_express
+    restart: always
+    ports:
+      - 8081:8081
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: zoro
+      ME_CONFIG_MONGODB_ADMINPASSWORD: zoro
+      ME_CONFIG_MONGODB_SERVER: mongoDB  # Reference the mongoDB service
+      ME_CONFIG_MONGODB_URL: mongodb://zoro:zoro@mongoDB:27017/?authSource=admin
+    depends_on:
+      - mongoDB
+    networks:
+      - app-network
+
+volumes:
+  mongo_data:
+
+networks:
+  app-network:
+    driver: bridge
