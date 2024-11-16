@@ -1,52 +1,70 @@
 version: '3.8'
 
 services:
-  app:
-    build:
-      context: .  # Assumes Dockerfile is in the current directory
-      dockerfile: Dockerfile
-    container_name: spring_app
-    ports:
-      - "8080:8080"
-    depends_on:
-      - mongoDB
-    environment:
-      SPRING_PROFILES_ACTIVE: docker  # Optional if using profiles in Spring Boot
-    networks:
-      - app-network
-
+  # MongoDB Service
   mongoDB:
     image: mongo
     container_name: mongo_db
     ports:
       - "27017:27017"
     volumes:
-      - mongo_data:/data/db
+      - mongo:/data
     environment:
-      MONGO_INITDB_ROOT_USERNAME: zoro
-      MONGO_INITDB_ROOT_PASSWORD: zoro
-    networks:
-      - app-network
+      - MONGO_INITDB_ROOT_USERNAME=zoro
+      - MONGO_INITDB_ROOT_PASSWORD=zoro
 
+  # Mongo Express Service
   mongo-express:
     image: mongo-express
     container_name: mongo_express
     restart: always
     ports:
-      - 8081:8081
+      - "8081:8081"
     environment:
-      ME_CONFIG_MONGODB_ADMINUSERNAME: zoro
-      ME_CONFIG_MONGODB_ADMINPASSWORD: zoro
-      ME_CONFIG_MONGODB_SERVER: mongoDB  # Reference the mongoDB service
-      ME_CONFIG_MONGODB_URL: mongodb://zoro:zoro@mongoDB:27017/?authSource=admin
+      - ME_CONFIG_MONGODB_ADMINUSERNAME=zoro
+      - ME_CONFIG_MONGODB_ADMINPASSWORD=zoro
+      - ME_CONFIG_MONGODB_SERVER=mongoDB  # Reference to the MongoDB service
+      - ME_CONFIG_MONGODB_URL=mongodb://zoro:zoro@mongoDB:27017/?authSource=admin  # Full MongoDB connection URL
+
+  # Java Application Service
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: java_app
+    ports:
+      - "8080:8080"
     depends_on:
       - mongoDB
-    networks:
-      - app-network
+    environment:
+      - SPRING_DATA_MONGODB_URI=mongodb://zoro:zoro@mongoDB:27017/?authSource=admin
 
 volumes:
-  mongo_data:
+  mongo: {}
 
-networks:
-  app-network:
-    driver: bridge
+# Dockerfile content is included here:
+x-dockerfile: |
+  # Use Maven and JDK 21 on Alpine Linux for building
+  FROM maven:3.8.8-eclipse-temurin-21-alpine AS build
+
+  # Create an app directory and copy the code there
+  WORKDIR /app
+  COPY . /app
+
+  # Build the Maven project
+  RUN mvn clean package -DskipTests
+
+  # Start a new, lightweight image to run the application
+  FROM eclipse-temurin:21-jdk-alpine
+
+  # Create an app directory in the new container
+  WORKDIR /app
+
+  # Copy the packaged JAR file from the build image to the app directory
+  COPY --from=build /app/target/*.jar /app/app.jar
+
+  # Expose port 8080
+  EXPOSE 8080
+
+  # Specify the command to run your application
+  ENTRYPOINT ["java", "-jar", "/app/app.jar"]
